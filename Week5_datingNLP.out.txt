@@ -1,0 +1,296 @@
+library(stringr)
+
+> library(dplyr)
+
+> library(ggplot2)
+
+> library(mosaic)
+
+> library(stringr)
+
+> library(xtable)
+
+> library(gridExtra)
+
+> library(stopwords)
+
+> library(quanteda)
+
+> library(parallel)
+
+> library(caret)
+
+> library(rpart)
+
+> library(Matrix)
+
+> # Set rounding to 2 digits
+> options(digits = 2)
+
+> ## 1. Load texts
+> 
+> # Load applicants' profiles
+> profiles <- read.csv(file.path("dating", "okcupid_profiles.csv"),
++                      header  .... [TRUNCATED] 
+
+> dim(profiles)
+[1] 59946    31
+
+> # Depict number of male and female
+> table(profiles$sex)
+
+    f     m 
+24117 35829 
+
+> # Select the essays columns
+> essays <- select(profiles, starts_with("essay"))
+
+> # Combine all essays of user into one essay
+> essays <- apply(essays, MARGIN = 1, FUN = paste, collapse = " ")
+
+> # Add 'essays' column to the Data Frame containing the full essay for each user
+> profiles$essays <- essays
+
+> # 2. Clean text, tokenize, remove stopwords 
+> 
+> # Tokenize essay texts
+> all.tokens <- tokens(essays,
++                      what = "word",
++      .... [TRUNCATED] 
+
+> # Lower case the tokens
+> all.tokens <- tokens_tolower(all.tokens)
+
+> # list languages for a specific source
+> stopwords::stopwords_getlanguages("snowball")
+ [1] "da" "de" "en" "es" "fi" "fr" "hu" "ir" "it" "nl" "no" "pt" "ro" "ru" "sv"
+
+> head(stopwords::stopwords("english"), 20)
+ [1] "i"          "me"         "my"         "myself"     "we"         "our"       
+ [7] "ours"       "ourselves"  "you"        "your"       "yours"      "yourself"  
+[13] "yourselves" "he"         "him"        "his"        "himself"    "she"       
+[19] "her"        "hers"      
+
+> #Remove stopwords
+> all.tokens <- tokens_select(all.tokens, stopwords(),
++                             selection = "remove"
++ )
+
+> # 3. Perform stemming on the tokens.
+> all.tokens <- tokens_wordstem(all.tokens, language = "english")
+
+> # 4. DFM - document-term frequency matrix
+> all.tokens.dfm <- dfm(all.tokens, tolower = TRUE)
+
+> all.tokens.dfm[1:5, 1:5]
+Document-feature matrix of: 5 documents, 5 features (56.00% sparse) and 0 docvars.
+       features
+docs    love think kind intellectu either
+  text1    4     1    1          1      1
+  text2    4     0    1          0      0
+  text3    1     1    1          1      0
+  text4    0     0    0          0      0
+  text5    0     0    0          0      0
+
+> dim(all.tokens.dfm)
+[1]  59946 156452
+
+> # Trim
+> all.tokens.dfm <- dfm_trim(all.tokens.dfm, min_termfreq = 1000, min_docfreq = 10000)
+
+> dim(all.tokens.dfm)
+[1] 59946   138
+
+> # 4.TF- IDF
+> 
+> all.tokens.matrix <- Matrix(all.tokens.dfm, sparse = TRUE)
+
+> # TF function
+> term.frequency <- function(row) {
++   row / sum(row)
++ }
+
+> # IDF function
+> inverse.doc.freq <- function(column) {
++   N <- length(column)
++   doc.count <- length(which(column > 0))
++   
++   results <- log10 .... [TRUNCATED] 
+
+> # TF- IDF function
+> tfidf <- function(tf, idf) {
++   tf * idf
++ }
+
+> # TF matrix
+> all.tokens.tf <- apply(all.tokens.matrix, MARGIN = 1, FUN = term.frequency)
+
+> all.tokens.tf[1:5, 1:5]
+        docs
+features text1 text2  text3 text4 text5
+   love  0.044 0.077 0.0082     0     0
+   think 0.011 0.000 0.0082     0     0
+   kind  0.011 0.019 0.0082     0     0
+   guy   0.022 0.019 0.0000     0     0
+   say   0.011 0.000 0.0082     0     0
+
+> # IDF vector
+> all.tokens.idf <- apply(all.tokens.matrix, MARGIN = 2, FUN = inverse.doc.freq)
+
+> all.tokens.idf
+    love    think     kind      guy      say      can     tell     talk     like 
+    0.16     0.35     0.59     0.65     0.53     0.27     0.74     0.62     0.14 
+  friend  favorit      way     know    thing     life   better     make    littl 
+    0.15     0.51     0.52     0.33     0.23     0.24     0.68     0.25     0.61 
+    year      old  probabl   realli  serious  convers    stuff    laugh     mind 
+    0.43     0.73     0.72     0.34     0.75     0.76     0.73     0.51     0.67 
+   smile    still     work     just     read     game     last     good  current 
+    0.61     0.67     0.19     0.27     0.38     0.63     0.77     0.20     0.66 
+     tri     time     book    peopl     find     look     want     movi     show 
+    0.34     0.22     0.26     0.23     0.46     0.36     0.34     0.22     0.45 
+   music     rock     food    anyth    humor   someon     hang      new     mean 
+    0.18     0.65     0.22     0.41     0.71     0.54     0.69     0.30     0.74 
+    cook    drink      eat   around interest adventur    alway     hope    right 
+    0.53     0.64     0.58     0.59     0.51     0.63     0.49     0.76     0.59 
+  person      fun     hard    watch      lot       tv   pretti     much  everyth 
+    0.46     0.44     0.74     0.45     0.43     0.64     0.51     0.42     0.63 
+  though     need      big     play      see     open    write    world     live 
+    0.75     0.69     0.58     0.46     0.51     0.65     0.71     0.51     0.33 
+     san    great     feel     meet     move    first      get    spend     also 
+    0.72     0.53     0.58     0.54     0.62     0.70     0.26     0.66     0.35 
+    danc    enjoy   someth   listen      use      now     come     back    usual 
+    0.61     0.35     0.52     0.53     0.72     0.46     0.63     0.57     0.67 
+     art     well     long   recent     mani   explor       go   school     best 
+    0.69     0.55     0.64     0.72     0.60     0.75     0.24     0.62     0.67 
+     day      one      ask  sometim   famili     take    night    everi     citi 
+    0.45     0.36     0.76     0.67     0.35     0.45     0.61     0.73     0.62 
+    list   travel     home      job     keep    happi    start     even     girl 
+    0.78     0.48     0.55     0.68     0.70     0.69     0.71     0.65     0.71 
+   never      eye      man   dinner     sens  passion    learn     area      bay 
+    0.68     0.65     0.77     0.75     0.71     0.76     0.61     0.74     0.70 
+   place     next      run 
+    0.61     0.65     0.77 
+
+> gc()
+          used (Mb) gc trigger (Mb) max used (Mb)
+Ncells 3.6e+06  195    6.7e+06  360  6.7e+06  360
+Vcells 5.8e+07  445    1.4e+08 1048  1.8e+08 1364
+
+> # TF- IDF matrix
+> all.tokens.tfidf <- t(apply(all.tokens.tf, MARGIN = 2, FUN = tfidf, idf = all.tokens.idf))
+
+> all.tokens.tfidf[1:5, 1:5]
+       features
+docs      love  think   kind   guy    say
+  text1 0.0070 0.0039 0.0065 0.014 0.0059
+  text2 0.0121 0.0000 0.0113 0.012 0.0000
+  text3 0.0013 0.0029 0.0048 0.000 0.0044
+  text4 0.0000 0.0000 0.0000 0.000 0.0000
+  text5 0.0000 0.0000 0.0000 0.000 0.0000
+
+> # Convert na to 0
+> all.tokens.tfidf[is.na(all.tokens.tfidf)] <- 0
+
+> # 5. Train a model to identify male vs. female by their text
+> 
+> # Convert to dataframe
+> all.tokens.tfidf.df <- as.data.frame(all.tokens.tfidf)
+
+> # Rectify the names of variables
+> names(all.tokens.tfidf.df) <- make.names(names(all.tokens.tfidf.df))
+
+> # Add labels of male\ female to the DFM data frame
+> all.tokens.tfidf.df$sex <- profiles$sex
+
+> # 10 folds cross validation 3 times- repeatedcv
+> set.seed(100)
+
+> # Training parameters
+> control <- trainControl(method = "repeatedcv", number = 10, repeats = 3, savePredictions = TRUE)
+
+> start_time <- Sys.time()
+
+> # Training the model
+> model <- train(
++   x = all.tokens.tfidf.df[ , 1:ncol(all.tokens.tfidf.df)-1],
++   y = all.tokens.tfidf.df[ , ncol(all.tokens .... [TRUNCATED] 
+
+> end_time <- Sys.time()
+
+> end_time - start_time
+Time difference of 3 mins
+
+> # Test the model by calculating confusion matrix
+> tree.model.confusionMatrix <- confusionMatrix(model)
+
+> # Since entries are percentual average cell counts across resamples- multiply by length
+> tree.model.confusionMatrix$table <- tree.model.confusionMa .... [TRUNCATED] 
+
+> tree.model.confusionMatrix
+Cross-Validated (10 fold, repeated 3 times) Confusion Matrix 
+
+(entries are percentual average cell counts across resamples)
+ 
+          Reference
+Prediction    f    m
+         f 2091 1210
+         m 3501 7098
+                            
+ Accuracy (average) : 0.6611
+
+
+> #6. Remove the batch effect: find and eliminate "male\ female words"
+> batch.words <- names(model$finalModel$variable.importance)
+
+> batch.words
+ [1] "love"    "guy"     "girl"    "danc"    "famili"  "smile"   "passion" "laugh"  
+ [9] "friend"  "home"    "dinner"  "spend"   "just"   
+
+> tokens.set <- all.tokens.tfidf.df[, !(names(all.tokens.tfidf.df) %in% batch.words)]
+
+> tokens.set[1:5, 1:5]
+       think   kind    say    can   tell
+text1 0.0039 0.0065 0.0059 0.0030 0.0082
+text2 0.0000 0.0113 0.0000 0.0051 0.0000
+text3 0.0029 0.0048 0.0044 0.0000 0.0000
+text4 0.0000 0.0000 0.0000 0.0000 0.0000
+text5 0.0000 0.0000 0.0000 0.0000 0.0000
+
+> # 7. Cluster the applicants to 2,3,4 and 10 clusters
+> 
+> pca <- prcomp(tokens.set[ , 1:ncol(tokens.set)-1], scale = TRUE)
+
+> # Color palette
+> rbPal <- colorRampPalette(c("red", "blue"))
+
+> pdf("Week5_datingNLP.pdf")
+
+> for (k in c(2, 3, 4, 10)) {
++   # Clustering
++   clusters <- kmeans(tokens.set[ , 1:ncol(tokens.set)-1], k, iter.max = 100)
++   print(table(clusters .... [TRUNCATED] 
+
+    1     2 
+   30 59916 
+
+    1     2     3 
+   36 56160  3750 
+
+    1     2     3     4 
+   10 42431 17469    36 
+
+    1     2     3     4     5     6     7     8     9    10 
+ 3213    50    36  1607  5628 24768   429    29 12993 11193 
+
+> dev.off()
+null device 
+          1 
+
+> final.model <- model$finalModel
+
+> save(
++   final.model,
++   all.tokens.tfidf.df,
++   pca,
++   file = "Week5_datingNLP.rdata"
++ )
